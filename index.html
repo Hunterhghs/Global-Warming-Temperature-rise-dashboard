@@ -70,7 +70,61 @@ html,body{
 }
 #map{width:100%;height:100%}
 
-/* ===== SIDEBAR ===== */
+/* ===== LEFT PANEL — Temperature Rise ===== */
+#left-panel{
+  width:200px;flex-shrink:0;
+  background:var(--bg-surface);
+  border-right:1px solid var(--border-subtle);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:20px 12px;gap:8px;
+  transition:width 0.3s ease;
+}
+#left-panel .rise-label{
+  font-size:10px;text-transform:uppercase;letter-spacing:0.08em;
+  color:var(--text-muted);font-weight:600;text-align:center;
+}
+#left-panel .rise-value{
+  font-family:var(--font-display);font-size:42px;font-weight:700;
+  color:var(--accent-red);line-height:1;text-align:center;
+  transition:color 0.3s;
+}
+#left-panel .rise-sub{
+  font-size:11px;color:var(--text-secondary);text-align:center;
+  font-family:var(--font-mono);
+}
+#left-panel .rise-bar{
+  width:100%;height:6px;background:var(--bg-surface-highest);
+  border-radius:3px;overflow:hidden;
+}
+#left-panel .rise-bar-fill{
+  height:100%;background:linear-gradient(to right,var(--accent-amber),var(--accent-red));
+  border-radius:3px;transition:width 0.3s;
+}
+#left-panel .rise-scenarios{
+  display:flex;flex-direction:column;gap:3px;width:100%;margin-top:4px;
+}
+#left-panel .rise-scenario-row{
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:10px;font-family:var(--font-mono);
+  padding:2px 6px;border-radius:3px;
+  cursor:pointer;transition:background 0.15s;
+}
+#left-panel .rise-scenario-row:hover{background:var(--bg-surface-high)}
+#left-panel .rise-scenario-row.active{background:rgba(64,206,243,0.1);color:var(--text-primary)}
+#left-panel .rise-scenario-row .rs-name{color:var(--text-muted)}
+#left-panel .rise-scenario-row .rs-val{font-weight:600}
+
+@media(max-width:900px){
+  #left-panel{width:140px;padding:12px 8px}
+  #left-panel .rise-value{font-size:28px}
+}
+@media(max-width:700px){
+  #left-panel{width:100%;flex-direction:row;padding:10px 16px;gap:16px;border-right:none;border-bottom:1px solid var(--border-subtle)}
+  #left-panel .rise-value{font-size:24px}
+  #left-panel .rise-bar{display:none}
+  #left-panel .rise-scenarios{flex-direction:row;gap:8px}
+}
 #sidebar{
   width:340px;flex-shrink:0;
   background:var(--bg-surface);
@@ -339,6 +393,21 @@ html,body{
 
   <!-- MAIN CONTENT -->
   <div id="main">
+    <!-- LEFT PANEL — Temperature Rise -->
+    <div id="left-panel" role="complementary" aria-label="Temperature rise indicator">
+      <div class="rise-label">Temperature Rise</div>
+      <div class="rise-value" id="rise-value">+2.4°F</div>
+      <div class="rise-sub" id="rise-sub">vs. 1995–2014</div>
+      <div class="rise-bar">
+        <div class="rise-bar-fill" id="rise-bar-fill" style="width:25%"></div>
+      </div>
+      <div class="rise-scenarios" id="rise-scenarios">
+        <div class="rise-scenario-row" data-rise-ssp="ssp126"><span class="rs-name">SSP1-2.6</span><span class="rs-val">+1.4°F</span></div>
+        <div class="rise-scenario-row active" data-rise-ssp="ssp245"><span class="rs-name">SSP2-4.5</span><span class="rs-val">+2.4°F</span></div>
+        <div class="rise-scenario-row" data-rise-ssp="ssp370"><span class="rs-name">SSP3-7.0</span><span class="rs-val">+3.8°F</span></div>
+        <div class="rise-scenario-row" data-rise-ssp="ssp585"><span class="rs-name">SSP5-8.5</span><span class="rs-val">+6.1°F</span></div>
+      </div>
+    </div>
     <div id="map-container" role="region" aria-label="World temperature map">
       <div id="map"></div>
     </div>
@@ -470,21 +539,20 @@ html,body{
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ===== TEMPERATURE COLOR SCALE (°F anomaly) =====
+// ===== TEMPERATURE COLOR SCALE (absolute °F) =====
 // Baseline global avg surface temp 1995-2014: ~57.2°F (14.0°C)
 const BASELINE_F = 57.2;
-function tempColor(anomalyC) {
-  if (anomalyC == null || isNaN(anomalyC)) return '#1a1a2e';
-  const aF = anomalyC * 1.8; // convert °C anomaly to °F anomaly
-  if (aF < 0.9) return '#00b4d8';
-  if (aF < 1.8) return '#0096c7';
-  if (aF < 2.7) return '#48cae4';
-  if (aF < 3.6) return '#90e0ef';
-  if (aF < 4.5) return '#ffb703';
-  if (aF < 5.4) return '#fb8500';
-  if (aF < 6.3) return '#f77f00';
-  if (aF < 7.2) return '#e85d04';
-  if (aF < 9.0) return '#dc2f02';
+function tempColor(absF) {
+  if (absF == null || isNaN(absF)) return '#1a1a2e';
+  if (absF < 58) return '#00b4d8';
+  if (absF < 59) return '#0096c7';
+  if (absF < 60) return '#48cae4';
+  if (absF < 61) return '#90e0ef';
+  if (absF < 62) return '#ffb703';
+  if (absF < 63) return '#fb8500';
+  if (absF < 64) return '#f77f00';
+  if (absF < 65) return '#e85d04';
+  if (absF < 66) return '#dc2f02';
   return '#9d0208';
 }
 
@@ -515,6 +583,10 @@ const kpiHotRegionName = document.getElementById('kpi-hot-region-name');
 const kpiPopExposed = document.getElementById('kpi-pop-exposed');
 const topScenario = document.getElementById('top-scenario');
 const topYear = document.getElementById('top-year');
+// Left panel
+const riseValue = document.getElementById('rise-value');
+const riseSub = document.getElementById('rise-sub');
+const riseBarFill = document.getElementById('rise-bar-fill');
 
 // ===== INIT MAP =====
 const map = L.map('map', {
@@ -562,7 +634,7 @@ function updateMap() {
         anomaly = countryData[currentSSP][yearStr];
       }
       return {
-        fillColor: tempColor(anomaly),
+        fillColor: tempColor(anomaly != null ? toF(anomaly + 14.0) : null),
         weight: 0.5,
         opacity: 0.4,
         color: '#3a476c',
@@ -657,6 +729,26 @@ function updateKPIs() {
   yearDisplayValue.textContent = yearStr;
   yearSlider.value = currentYear;
   yearSlider.setAttribute('aria-valuenow', currentYear);
+  
+  // Update left panel — temperature rise
+  if (scenarioSummary && scenarioSummary.global_mean[yearStr] != null) {
+    const anomF = anomalyToF(scenarioSummary.global_mean[yearStr]);
+    riseValue.textContent = `+${anomF.toFixed(1)}°F`;
+    riseSub.textContent = `vs. 1995–2014 · ${currentSSP.toUpperCase()}`;
+    // Bar fill: max ~9°F anomaly = 100%
+    const pct = Math.min(100, (anomF / 9) * 100);
+    riseBarFill.style.width = `${pct}%`;
+  }
+  // Update left panel scenario rows
+  document.querySelectorAll('#rise-scenarios .rise-scenario-row').forEach(row => {
+    const ssp = row.dataset.riseSsp;
+    const sspSummary = summaries && summaries[ssp];
+    if (sspSummary && sspSummary.global_mean[yearStr] != null) {
+      const af = anomalyToF(sspSummary.global_mean[yearStr]);
+      row.querySelector('.rs-val').textContent = `+${af.toFixed(1)}°F`;
+    }
+    row.classList.toggle('active', ssp === currentSSP);
+  });
 }
 
 // ===== YEAR CHANGE =====
@@ -701,6 +793,21 @@ document.querySelectorAll('.speed-btn').forEach(btn => {
     document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     playbackSpeed = parseFloat(btn.dataset.speed);
+  });
+});
+
+// Left panel scenario rows
+document.querySelectorAll('#rise-scenarios .rise-scenario-row').forEach(row => {
+  row.addEventListener('click', () => {
+    const ssp = row.dataset.riseSsp;
+    if (ssp === currentSSP) return;
+    currentSSP = ssp;
+    updateMap();
+    updateKPIs();
+    // Also update right sidebar scenario buttons
+    document.querySelectorAll('.scenario-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.ssp === ssp);
+    });
   });
 });
 
