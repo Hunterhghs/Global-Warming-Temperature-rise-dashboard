@@ -636,13 +636,10 @@ const map = L.map('map', {
 
 // ===== LOAD DATA =====
 async function loadData() {
-  try {
   const [geoResp, tempResp] = await Promise.all([
     fetch('data/world-compact.geojson'),
     fetch('data/temperature-data.json')
   ]);
-  if (!geoResp.ok) throw new Error(`GeoJSON fetch failed: ${geoResp.status}`);
-  if (!tempResp.ok) throw new Error(`Temp data fetch failed: ${tempResp.status}`);
   worldGeoJSON = await geoResp.json();
   const tempAll = await tempResp.json();
   temperatureData = tempAll.data;
@@ -654,9 +651,6 @@ async function loadData() {
   
   updateMap();
   updateKPIs();
-  } catch(e) {
-    document.getElementById('map').innerHTML = `<div style="color:#ff7072;padding:40px;font-family:monospace"><h2>Error loading data</h2><p>${e.message}</p></div>`;
-  }
 }
 
 // ===== UPDATE MAP =====
@@ -667,79 +661,47 @@ function updateMap() {
   
   const yearStr = String(currentYear);
   
-  try {
   geoLayer = L.geoJSON(worldGeoJSON, {
     style: function(feature) {
-      const iso = feature.properties.ISO_A3;
-      const countryData = temperatureData[iso];
-      let absF = null;
-      if (absoluteData && absoluteData[iso] && absoluteData[iso][currentSSP] && absoluteData[iso][currentSSP][yearStr] != null) {
+      var iso = feature.properties.ISO_A3;
+      var absF = null;
+      if (absoluteData && absoluteData[iso] && absoluteData[iso][currentSSP]) {
         absF = absoluteData[iso][currentSSP][yearStr];
       }
-      let anomaly = null;
-      if (countryData && countryData[currentSSP] && countryData[currentSSP][yearStr] != null) {
-        anomaly = countryData[currentSSP][yearStr];
-      }
+      var hasData = (temperatureData[iso] && temperatureData[iso][currentSSP] && temperatureData[iso][currentSSP][yearStr] != null);
       return {
         fillColor: tempColor(absF),
         weight: 0.5,
         opacity: 0.4,
         color: '#3a476c',
-        fillOpacity: anomaly != null ? 0.85 : 0.15,
+        fillOpacity: hasData ? 0.85 : 0.15
       };
     },
     onEachFeature: function(feature, layer) {
-      const iso = feature.properties.ISO_A3;
-      const name = feature.properties.NAME || iso;
-      const countryData = temperatureData[iso];
-      const yearStr = String(currentYear);
-      let absF = null;
-      if (absoluteData && absoluteData[iso] && absoluteData[iso][currentSSP] && absoluteData[iso][currentSSP][yearStr] != null) {
-        absF = absoluteData[iso][currentSSP][yearStr];
-      }
-      let anomaly = null;
-      if (countryData && countryData[currentSSP] && countryData[currentSSP][yearStr] != null) {
-        anomaly = countryData[currentSSP][yearStr];
-      }
-      
-      // Compare across scenarios
-      const allAbs = {};
-      if (absoluteData && absoluteData[iso]) {
-        for (const ssp of ['ssp126', 'ssp245', 'ssp370', 'ssp585']) {
-          if (absoluteData[iso][ssp] && absoluteData[iso][ssp][yearStr] != null) {
-            allAbs[ssp] = absoluteData[iso][ssp][yearStr];
-          }
-        }
-      }
-      
-      let popupHTML = `<div class="country-popup"><h3>${name}</h3>`;
+      var iso = feature.properties.ISO_A3;
+      var name = feature.properties.NAME || iso;
+      var absF = (absoluteData && absoluteData[iso] && absoluteData[iso][currentSSP]) ? absoluteData[iso][currentSSP][yearStr] : null;
+      var anomaly = (temperatureData[iso] && temperatureData[iso][currentSSP]) ? temperatureData[iso][currentSSP][yearStr] : null;
+      var blF = (baselines && baselines[iso] != null) ? (baselines[iso] * 1.8 + 32) : null;
+
+      var popupHTML = '<div class=\"country-popup\"><h3>' + name + '</h3>';
       if (absF != null) {
-        const tempClass = absF >= 80 ? 'hot' : absF >= 65 ? 'warm' : 'cool';
-        const blF = baselines && baselines[iso] ? (baselines[iso] * 1.8 + 32) : null;
-        popupHTML += `<div class="temp-row"><span class="temp-label">Avg Temp (${currentSSP.toUpperCase()})</span><span class="temp-value ${tempClass}">${absF.toFixed(1)}°F</span></div>`;
+        var tc = absF >= 80 ? 'hot' : absF >= 65 ? 'warm' : 'cool';
+        popupHTML += '<div class=\"temp-row\"><span class=\"temp-label\">Avg Temp (' + currentSSP.toUpperCase() + ')</span><span class=\"temp-value ' + tc + '\">' + absF.toFixed(1) + '°F</span></div>';
         if (blF != null) {
-          popupHTML += `<div class="temp-row"><span class="temp-label" style="opacity:0.7">1995–2014 Baseline</span><span class="temp-value cool" style="opacity:0.7">${blF.toFixed(0)}°F</span></div>`;
+          popupHTML += '<div class=\"temp-row\"><span class=\"temp-label\" style=\"opacity:0.7\">1995–2014 Baseline</span><span class=\"temp-value cool\" style=\"opacity:0.7\">' + blF.toFixed(0) + '°F</span></div>';
         }
         if (anomaly != null) {
-          const anomF = anomalyToF(anomaly);
-          popupHTML += `<div class="temp-row"><span class="temp-label" style="opacity:0.6">Rise</span><span class="temp-value ${tempClass}" style="opacity:0.6">+${anomF.toFixed(1)}°F</span></div>`;
+          var anomF = anomaly * 1.8;
+          popupHTML += '<div class=\"temp-row\"><span class=\"temp-label\" style=\"opacity:0.6\">Rise</span><span class=\"temp-value ' + tc + '\" style=\"opacity:0.6\">+' + anomF.toFixed(1) + '°F</span></div>';
         }
       } else {
-        popupHTML += `<div class="temp-row"><span class="temp-label">No data</span><span class="temp-value">—</span></div>`;
-      }
-      // Show comparison across scenarios
-      for (const [ssp, val] of Object.entries(allAbs)) {
-        if (ssp === currentSSP) continue;
-        const tc = val >= 80 ? 'hot' : val >= 65 ? 'warm' : 'cool';
-        popupHTML += `<div class="temp-row"><span class="temp-label" style="opacity:0.65">${ssp}</span><span class="temp-value ${tc}" style="opacity:0.65">${val.toFixed(1)}°F</span></div>`;
+        popupHTML += '<div class=\"temp-row\"><span class=\"temp-label\">No data</span><span class=\"temp-value\">—</span></div>';
       }
       popupHTML += '</div>';
       layer.bindPopup(popupHTML);
     }
   }).addTo(map);
-  } catch(e) {
-    document.getElementById('map').innerHTML += `<div style="color:#ff7072;padding:10px;font-family:monospace;font-size:12px">Map render error: ${e.message}</div>`;
-  }
 }
 
 // ===== UPDATE KPIs =====
