@@ -636,10 +636,13 @@ const map = L.map('map', {
 
 // ===== LOAD DATA =====
 async function loadData() {
+  try {
   const [geoResp, tempResp] = await Promise.all([
     fetch('data/world-compact.geojson'),
     fetch('data/temperature-data.json')
   ]);
+  if (!geoResp.ok) throw new Error(`GeoJSON fetch failed: ${geoResp.status}`);
+  if (!tempResp.ok) throw new Error(`Temp data fetch failed: ${tempResp.status}`);
   worldGeoJSON = await geoResp.json();
   const tempAll = await tempResp.json();
   temperatureData = tempAll.data;
@@ -651,6 +654,9 @@ async function loadData() {
   
   updateMap();
   updateKPIs();
+  } catch(e) {
+    document.getElementById('map').innerHTML = `<div style="color:#ff7072;padding:40px;font-family:monospace"><h2>Error loading data</h2><p>${e.message}</p></div>`;
+  }
 }
 
 // ===== UPDATE MAP =====
@@ -661,6 +667,7 @@ function updateMap() {
   
   const yearStr = String(currentYear);
   
+  try {
   geoLayer = L.geoJSON(worldGeoJSON, {
     style: function(feature) {
       const iso = feature.properties.ISO_A3;
@@ -730,6 +737,9 @@ function updateMap() {
       layer.bindPopup(popupHTML);
     }
   }).addTo(map);
+  } catch(e) {
+    document.getElementById('map').innerHTML += `<div style="color:#ff7072;padding:10px;font-family:monospace;font-size:12px">Map render error: ${e.message}</div>`;
+  }
 }
 
 // ===== UPDATE KPIs =====
