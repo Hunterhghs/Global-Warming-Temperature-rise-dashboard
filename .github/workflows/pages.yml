@@ -8,6 +8,7 @@ permissions:
   pages: write
   id-token: write
   actions: write
+  administration: write
 concurrency:
   group: "pages"
   cancel-in-progress: false
