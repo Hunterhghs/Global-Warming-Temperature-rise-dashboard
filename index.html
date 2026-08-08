@@ -114,6 +114,11 @@ html,body{
 #left-panel .rise-scenario-row.active{background:rgba(64,206,243,0.1);color:var(--text-primary)}
 #left-panel .rise-scenario-row .rs-name{color:var(--text-muted)}
 #left-panel .rise-scenario-row .rs-val{font-weight:600}
+#left-panel .rise-divider{width:100%;height:1px;background:var(--border-subtle);margin:4px 0}
+#left-panel .rise-stat{width:100%;display:flex;flex-direction:column;gap:2px;padding:2px 6px}
+#left-panel .rise-stat .rs-label{font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)}
+#left-panel .rise-stat .rs-number{font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--text-primary);line-height:1.1}
+#left-panel .rise-stat .rs-detail{font-size:9px;color:var(--text-muted);font-family:var(--font-mono)}
 
 @media(max-width:900px){
   #left-panel{width:140px;padding:12px 8px}
@@ -407,6 +412,28 @@ html,body{
         <div class="rise-scenario-row" data-rise-ssp="ssp370"><span class="rs-name">SSP3-7.0</span><span class="rs-val">+3.8°F</span></div>
         <div class="rise-scenario-row" data-rise-ssp="ssp585"><span class="rs-name">SSP5-8.5</span><span class="rs-val">+6.1°F</span></div>
       </div>
+      <div class="rise-divider"></div>
+      <div class="rise-stat">
+        <span class="rs-label">Warming Rate</span>
+        <span class="rs-number" id="rise-rate">+1.0</span>
+        <span class="rs-detail">°F / decade</span>
+      </div>
+      <div class="rise-stat">
+        <span class="rs-label">Global Avg Temp</span>
+        <span class="rs-number" id="rise-abs">59.6°F</span>
+        <span class="rs-detail">estimated surface temp</span>
+      </div>
+      <div class="rise-divider"></div>
+      <div class="rise-stat">
+        <span class="rs-label">Peak Nation Rise</span>
+        <span class="rs-number" id="rise-peak" style="color:var(--accent-red)">+4.3°F</span>
+        <span class="rs-detail" id="rise-peak-name">SJM</span>
+      </div>
+      <div class="rise-stat">
+        <span class="rs-label">Exposed ≥90°F</span>
+        <span class="rs-number" id="rise-exposed" style="color:var(--accent-red)">2.7B</span>
+        <span class="rs-detail">people, 1-3+ mo/yr</span>
+      </div>
     </div>
     <div id="map-container" role="region" aria-label="World temperature map">
       <div id="map"></div>
@@ -587,6 +614,11 @@ const topYear = document.getElementById('top-year');
 const riseValue = document.getElementById('rise-value');
 const riseSub = document.getElementById('rise-sub');
 const riseBarFill = document.getElementById('rise-bar-fill');
+const riseRate = document.getElementById('rise-rate');
+const riseAbs = document.getElementById('rise-abs');
+const risePeak = document.getElementById('rise-peak');
+const risePeakName = document.getElementById('rise-peak-name');
+const riseExposed = document.getElementById('rise-exposed');
 
 // ===== INIT MAP =====
 const map = L.map('map', {
@@ -735,10 +767,27 @@ function updateKPIs() {
     const anomF = anomalyToF(scenarioSummary.global_mean[yearStr]);
     riseValue.textContent = `+${anomF.toFixed(1)}°F`;
     riseSub.textContent = `vs. 1995–2014 · ${currentSSP.toUpperCase()}`;
-    // Bar fill: max ~9°F anomaly = 100%
     const pct = Math.min(100, (anomF / 9) * 100);
     riseBarFill.style.width = `${pct}%`;
+    // Warming rate: anomaly / decades since 2025
+    const decades = Math.max(0.25, (currentYear - 2025) / 10);
+    riseRate.textContent = `+${(anomF / decades).toFixed(1)}`;
+    // Global avg absolute temp
+    const absF = toF(scenarioSummary.global_mean[yearStr] + 14.0);
+    riseAbs.textContent = `${absF.toFixed(1)}°F`;
   }
+  // Peak nation rise
+  if (hottestVal > -Infinity) {
+    const peakAnomF = anomalyToF(hottestVal);
+    risePeak.textContent = `+${peakAnomF.toFixed(1)}°F`;
+    risePeakName.textContent = hottestName || '—';
+  }
+  // Population exposed
+  const endYearExposed = 7.0;
+  const startYearExposed = 0.5;
+  const progress2 = (currentYear - 2025) / (2100 - 2025);
+  const exposed2 = startYearExposed + (endYearExposed - startYearExposed) * progress2;
+  riseExposed.textContent = `${exposed2.toFixed(1)}B`;
   // Update left panel scenario rows
   document.querySelectorAll('#rise-scenarios .rise-scenario-row').forEach(row => {
     const ssp = row.dataset.riseSsp;
