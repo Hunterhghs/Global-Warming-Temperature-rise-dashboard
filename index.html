@@ -518,7 +518,7 @@ html,body{
       <div class="legend-scale">
         <div class="legend-gradient"></div>
         <div class="legend-labels">
-          <span>57°</span><span>59°</span><span>61°</span><span>63°</span><span>66°</span><span>68°+</span>
+          <span>30°</span><span>45°</span><span>55°</span><span>65°</span><span>75°</span><span>85°+</span>
         </div>
       </div>
 
@@ -556,7 +556,7 @@ html,body{
       <span>·</span>
       <span>CMIP6 Multi-Model Ensemble (0.25°)</span>
       <span>·</span>
-      <span>Absolute temps ≈ anomaly + 1995–2014 baseline (57.2°F)</span>
+      <span>Per-country baselines from CCKP 1995–2014 climatology</span>
     </div>
     <div class="attribution">
       <a href="https://hheuristics.com" target="_blank" rel="noopener">H Heuristics</a> · CC BY 4.0
@@ -566,20 +566,18 @@ html,body{
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ===== TEMPERATURE COLOR SCALE (absolute °F) =====
-// Baseline global avg surface temp 1995-2014: ~57.2°F (14.0°C)
-const BASELINE_F = 57.2;
+// ===== TEMPERATURE COLOR SCALE (absolute °F, per-country baseline) =====
 function tempColor(absF) {
   if (absF == null || isNaN(absF)) return '#1a1a2e';
-  if (absF < 58) return '#00b4d8';
-  if (absF < 59) return '#0096c7';
-  if (absF < 60) return '#48cae4';
-  if (absF < 61) return '#90e0ef';
-  if (absF < 62) return '#ffb703';
-  if (absF < 63) return '#fb8500';
-  if (absF < 64) return '#f77f00';
-  if (absF < 65) return '#e85d04';
-  if (absF < 66) return '#dc2f02';
+  if (absF < 30) return '#0077b6';
+  if (absF < 40) return '#00b4d8';
+  if (absF < 50) return '#48cae4';
+  if (absF < 60) return '#90e0ef';
+  if (absF < 65) return '#ffb703';
+  if (absF < 70) return '#fb8500';
+  if (absF < 75) return '#f77f00';
+  if (absF < 80) return '#e85d04';
+  if (absF < 85) return '#dc2f02';
   return '#9d0208';
 }
 
@@ -595,8 +593,9 @@ let playbackTimer = null;
 let geoLayer = null;
 let temperatureData = null;
 let worldGeoJSON = null;
-let summaries = null;
-let hotspots = null;
+let absoluteData = null;
+let baselines = null;
+let summariesAbsF = null;
 
 // ===== ELEMENT REFS =====
 const mapEl = document.getElementById('map');
@@ -642,7 +641,10 @@ async function loadData() {
   worldGeoJSON = await geoResp.json();
   const tempAll = await tempResp.json();
   temperatureData = tempAll.data;
+  absoluteData = tempAll.absolute;
+  baselines = tempAll.baselines_c;
   summaries = tempAll.summaries;
+  summariesAbsF = tempAll.summaries_abs_f;
   hotspots = tempAll.hotspots;
   
   updateMap();
@@ -661,12 +663,16 @@ function updateMap() {
     style: function(feature) {
       const iso = feature.properties.ISO_A3;
       const countryData = temperatureData[iso];
+      let absF = null;
+      if (absoluteData && absoluteData[iso] && absoluteData[iso][currentSSP] && absoluteData[iso][currentSSP][yearStr] != null) {
+        absF = absoluteData[iso][currentSSP][yearStr];
+      }
       let anomaly = null;
       if (countryData && countryData[currentSSP] && countryData[currentSSP][yearStr] != null) {
         anomaly = countryData[currentSSP][yearStr];
       }
       return {
-        fillColor: tempColor(anomaly != null ? toF(anomaly + 14.0) : null),
+        fillColor: tempColor(absF),
         weight: 0.5,
         opacity: 0.4,
         color: '#3a476c',
@@ -678,37 +684,45 @@ function updateMap() {
       const name = feature.properties.NAME || iso;
       const countryData = temperatureData[iso];
       const yearStr = String(currentYear);
+      let absF = null;
+      if (absoluteData && absoluteData[iso] && absoluteData[iso][currentSSP] && absoluteData[iso][currentSSP][yearStr] != null) {
+        absF = absoluteData[iso][currentSSP][yearStr];
+      }
       let anomaly = null;
       if (countryData && countryData[currentSSP] && countryData[currentSSP][yearStr] != null) {
         anomaly = countryData[currentSSP][yearStr];
       }
       
       // Compare across scenarios
-      const allAnomalies = {};
-      if (countryData) {
+      const allAbs = {};
+      if (absoluteData && absoluteData[iso]) {
         for (const ssp of ['ssp126', 'ssp245', 'ssp370', 'ssp585']) {
-          if (countryData[ssp] && countryData[ssp][yearStr] != null) {
-            allAnomalies[ssp] = countryData[ssp][yearStr];
+          if (absoluteData[iso][ssp] && absoluteData[iso][ssp][yearStr] != null) {
+            allAbs[ssp] = absoluteData[iso][ssp][yearStr];
           }
         }
       }
       
       let popupHTML = `<div class="country-popup"><h3>${name}</h3>`;
-      if (anomaly != null) {
-        const absF = toF(anomaly + 14.0);
-        const anomF = anomalyToF(anomaly);
-        const tempClass = anomaly >= 3 ? 'hot' : anomaly >= 1.5 ? 'warm' : 'cool';
+      if (absF != null) {
+        const tempClass = absF >= 80 ? 'hot' : absF >= 65 ? 'warm' : 'cool';
+        const blF = baselines && baselines[iso] ? (baselines[iso] * 1.8 + 32) : null;
         popupHTML += `<div class="temp-row"><span class="temp-label">Avg Temp (${currentSSP.toUpperCase()})</span><span class="temp-value ${tempClass}">${absF.toFixed(1)}°F</span></div>`;
-        popupHTML += `<div class="temp-row"><span class="temp-label" style="opacity:0.7">Anomaly</span><span class="temp-value ${tempClass}" style="opacity:0.7">+${anomF.toFixed(1)}°F</span></div>`;
+        if (blF != null) {
+          popupHTML += `<div class="temp-row"><span class="temp-label" style="opacity:0.7">1995–2014 Baseline</span><span class="temp-value cool" style="opacity:0.7">${blF.toFixed(0)}°F</span></div>`;
+        }
+        if (anomaly != null) {
+          const anomF = anomalyToF(anomaly);
+          popupHTML += `<div class="temp-row"><span class="temp-label" style="opacity:0.6">Rise</span><span class="temp-value ${tempClass}" style="opacity:0.6">+${anomF.toFixed(1)}°F</span></div>`;
+        }
       } else {
         popupHTML += `<div class="temp-row"><span class="temp-label">No data</span><span class="temp-value">—</span></div>`;
       }
       // Show comparison across scenarios
-      for (const [ssp, val] of Object.entries(allAnomalies)) {
+      for (const [ssp, val] of Object.entries(allAbs)) {
         if (ssp === currentSSP) continue;
-        const absF2 = toF(val + 14.0);
-        const tc = val >= 3 ? 'hot' : val >= 1.5 ? 'warm' : 'cool';
-        popupHTML += `<div class="temp-row"><span class="temp-label" style="opacity:0.65">${ssp}</span><span class="temp-value ${tc}" style="opacity:0.65">${absF2.toFixed(1)}°F</span></div>`;
+        const tc = val >= 80 ? 'hot' : val >= 65 ? 'warm' : 'cool';
+        popupHTML += `<div class="temp-row"><span class="temp-label" style="opacity:0.65">${ssp}</span><span class="temp-value ${tc}" style="opacity:0.65">${val.toFixed(1)}°F</span></div>`;
       }
       popupHTML += '</div>';
       layer.bindPopup(popupHTML);
@@ -720,22 +734,22 @@ function updateMap() {
 function updateKPIs() {
   const yearStr = String(currentYear);
   
-  // Global mean — show absolute °F
+  // Global mean — use absolute °F from summaries_abs_f
   const scenarioSummary = summaries && summaries[currentSSP];
   if (scenarioSummary && scenarioSummary.global_mean[yearStr] != null) {
-    const gmC = scenarioSummary.global_mean[yearStr];
-    const gmF = toF(gmC + 14.0); // absolute °F (anomaly + baseline)
-    const anomF = anomalyToF(gmC);
+    const anomF = anomalyToF(scenarioSummary.global_mean[yearStr]);
+    const gmF = (summariesAbsF && summariesAbsF[currentSSP] && summariesAbsF[currentSSP].global_mean[yearStr]) 
+      || toF(scenarioSummary.global_mean[yearStr] + 14.0);
     kpiGlobalMean.textContent = `${gmF.toFixed(1)}°F`;
     kpiGlobalDetail.textContent = `+${anomF.toFixed(1)}°F vs. 1995–2014 baseline · ${currentSSP.toUpperCase()}`;
   }
   
-  // Find hottest country — show absolute °F
+  // Find hottest country by absolute °F
   let hottestCode = null, hottestVal = -Infinity, hottestName = '';
-  if (temperatureData) {
-    for (const [code, countryData] of Object.entries(temperatureData)) {
-      if (countryData[currentSSP] && countryData[currentSSP][yearStr] != null) {
-        const val = countryData[currentSSP][yearStr];
+  if (absoluteData) {
+    for (const [code, countryAbs] of Object.entries(absoluteData)) {
+      if (countryAbs[currentSSP] && countryAbs[currentSSP][yearStr] != null) {
+        const val = countryAbs[currentSSP][yearStr];
         if (val > hottestVal) { hottestVal = val; hottestCode = code; }
       }
     }
@@ -743,8 +757,7 @@ function updateKPIs() {
       const feat = worldGeoJSON.features.find(f => f.properties.ISO_A3 === hottestCode);
       if (feat) hottestName = feat.properties.NAME || hottestCode;
     }
-    const hotAbsF = toF(hottestVal + 14.0);
-    kpiHotRegionTemp.textContent = `${hotAbsF.toFixed(1)}°F`;
+    kpiHotRegionTemp.textContent = `${hottestVal.toFixed(1)}°F`;
     kpiHotRegionName.textContent = hottestName || hottestCode || '—';
   }
   
@@ -772,8 +785,9 @@ function updateKPIs() {
     // Warming rate: anomaly / decades since 2025
     const decades = Math.max(0.25, (currentYear - 2025) / 10);
     riseRate.textContent = `+${(anomF / decades).toFixed(1)}`;
-    // Global avg absolute temp
-    const absF = toF(scenarioSummary.global_mean[yearStr] + 14.0);
+    // Global avg absolute temp — use summariesAbsF
+    const absF = (summariesAbsF && summariesAbsF[currentSSP] && summariesAbsF[currentSSP].global_mean[yearStr])
+      || toF(scenarioSummary.global_mean[yearStr] + 14.0);
     riseAbs.textContent = `${absF.toFixed(1)}°F`;
   }
   // Peak nation rise
@@ -912,8 +926,12 @@ document.querySelectorAll('.hotspot-btn').forEach(btn => {
       }
     }
     if (maxAnomaly > -Infinity) {
-      const absF = toF(maxAnomaly + 14.0);
-      kpiHotRegionTemp.textContent = `${absF.toFixed(1)}°F`;
+      if (absoluteData && absoluteData[maxCountry] && absoluteData[maxCountry][currentSSP] && absoluteData[maxCountry][currentSSP][yearStr] != null) {
+        kpiHotRegionTemp.textContent = `${absoluteData[maxCountry][currentSSP][yearStr].toFixed(1)}°F`;
+      } else {
+        const absF = toF(maxAnomaly + 14.0);
+        kpiHotRegionTemp.textContent = `${absF.toFixed(1)}°F`;
+      }
       kpiHotRegionName.textContent = regionData.name;
     }
   });
