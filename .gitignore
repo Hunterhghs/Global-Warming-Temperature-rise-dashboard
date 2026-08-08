@@ -1,0 +1,15 @@
+# Intermediate data files (not needed for dashboard)
+data/projections.json
+data/world.geojson
+data/fetch_climate_data.py
+data/preprocess_geojson.py
+
+# Stitch design reference (empty)
+stitch-sources/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
